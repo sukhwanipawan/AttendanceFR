@@ -1,0 +1,74 @@
+#Using this code we can mark the attendance of individual by recognising the face in webcam
+#For reconising we must have a clear image of individual's face already stored in folder "ImageData"
+
+
+import cv2 as cv
+import numpy as np
+import face_recognition as fr
+import  datetime
+import os
+
+path = 'ImageData'
+images = []
+classNames = []
+#encodes = []
+mylist = os.listdir(path)
+#print(mylist)
+
+for i in mylist:        #By this loop we will get all images in one list and all names of images in other list
+    current_img = cv.imread(f'{path}/{i}')
+    images.append(current_img)
+    classNames.append(os.path.splitext(i)[0])
+print('Known faces are ', classNames)
+
+def findEncodings(images):          #This function will take list of images as input and return encodings of those images in a list
+    encodedList = []
+    for img in images:
+        img = cv.cvtColor(img,cv.COLOR_BGR2RGB)
+        imgEncod = fr.face_encodings(img)[0]
+        encodedList.append(imgEncod)
+    return encodedList
+
+knownfaces = findEncodings(images)      #Calling function
+print('Encodings of faces is saved successfully')
+
+def markAttendance(name):
+    with open('Attendance.csv','r+') as t:
+        mydatalist = t.readlines()
+        #print(mydatalist)
+        namelist = []
+        for line in mydatalist:
+            entry = line.split(',')
+            namelist.append(entry[0])
+        if name not in namelist:
+            now = datetime.datetime.now()
+            current_time = now.strftime("%H:%M:%S")
+            t.writelines(f'\n{name},{current_time}')
+
+cap = cv.VideoCapture(0)
+
+while True:
+    ret, frame = cap.read()
+    frameS = cv.resize(frame,(0,0),None,0.25,0.25)        #Resizing image frame because smaller size will be better to process
+    frameS = cv.cvtColor(frameS,cv.COLOR_BGR2RGB)
+
+    faceLoc = fr.face_locations(frameS)     #we are not using index 0 because we may have more than one faces in webcame at a time
+    framencode = fr.face_encodings(frameS)  #we are not using index 0 because we may have more than one faces in webcame at a time
+
+    for encodFace,LocationsFace in zip(framencode,faceLoc):
+        matches = fr.compare_faces(knownfaces,encodFace)
+        faceDis = fr.face_distance(knownfaces,encodFace)
+        #print(faceDis)
+        matchIndex = np.nanargmin(faceDis)
+        #print(matchIndex)
+        if matches[matchIndex]:
+            name = classNames[matchIndex]
+            #print(classNames[matchIndex])
+            top,right,bottom,left = faceLoc[0][0],faceLoc[0][1],faceLoc[0][2],faceLoc[0][3]
+            top, right, bottom, left = top*4,right*4,bottom*4,left*4
+            cv.rectangle(frame,(left,top),(right,bottom),(255,0,0),2)
+            cv.rectangle(frame, (left, top-50), (right, bottom), (255, 0, 0),1)
+            cv.putText(frame,name,(left + 6, top - 6),1,1,(255,150,0),2)
+            markAttendance(name)
+    cv.imshow('Output', frame)
+    cv.waitKey(1)
